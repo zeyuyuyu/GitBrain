@@ -1,25 +1,65 @@
-import os
-import openai
+import asyncio
+from typing import List, Any, Callable, Coroutine
+from dataclasses import dataclass
+from collections import deque
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+@dataclass
+class Task:
+    func: Callable[..., Coroutine]
+    args: tuple
+    kwargs: dict
 
-def generate_text(prompt, max_tokens=100, temperature=0.7, top_p=1.0, n=1):
-    """Generate text using the OpenAI GPT-3 model."""
-    response = openai.Completion.create(
-        engine="text-davinci-002",
-        prompt=prompt,
-        max_tokens=max_tokens,
-        n=n,
-        stop=None,
-        temperature=temperature,
-        top_p=top_p,
-    )
-    return response.choices[0].text.strip()
+class TaskQueue:
+    def __init__(self, max_concurrent: int = 5):
+        self.max_concurrent = max_concurrent
+        self.queue = deque()
+        self.active = 0
+        self.results = []
 
-def main():
-    prompt = "Once upon a time, in a faraway land, there lived a powerful wizard who could..."
-    generated_text = generate_text(prompt)
-    print(generated_text)
+    async def add_task(self, func: Callable[..., Coroutine], *args, **kwargs):
+        task = Task(func, args, kwargs)
+        self.queue.append(task)
 
-if __name__ == "__main__":
-    main()
+    async def process_queue(self):
+        while self.queue or self.active > 0:
+            while self.queue and self.active < self.max_concurrent:
+                task = self.queue.popleft()
+                asyncio.create_task(self._execute_task(task))
+                self.active += 1
+            await asyncio.sleep(0.1)
+
+    async def _execute_task(self, task: Task):
+        try:
+            result = await task.func(*task.args, **task.kwargs)
+            self.results.append(result)
+        except Exception as e:
+            print(f'Task failed: {str(e)}')
+        finally:
+            self.active -= 1
+
+class GitBrain:
+    def __init__(self):
+        self.task_queue = TaskQueue()
+
+    async def process_files(self, files: List[str]):
+        for file in files:
+            await self.task_queue.add_task(self.process_file, file)
+        await self.task_queue.process_queue()
+        return self.task_queue.results
+
+    async def process_file(self, filepath: str) -> dict:
+        # Simulated file processing
+        await asyncio.sleep(1)  # Simulate work
+        return {
+            'filepath': filepath,
+            'status': 'processed'
+        }
+
+async def main():
+    brain = GitBrain()
+    files = ['file1.txt', 'file2.txt', 'file3.txt']
+    results = await brain.process_files(files)
+    print(f'Processed {len(results)} files')
+
+if __name__ == '__main__':
+    asyncio.run(main())
