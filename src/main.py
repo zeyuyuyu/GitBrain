@@ -1,19 +1,11 @@
-import openai
 import os
+import openai
 
-API_KEY = os.environ.get('OPENAI_API_KEY')
+class LLMIntegration:
+    def __init__(self, api_key):
+        self.api_key = api_key
+        openai.api_key = api_key
 
-def generate_code_suggestions(prompt):
-    """
-    Generate code suggestions using the OpenAI API.
-    
-    Args:
-        prompt (str): The prompt to use for generating code suggestions.
-    
-    Returns:
-        str: The generated code suggestions.
-    """
-    openai.api_key = API_KEY
-    
-    response = openai.Completion.create(
-        engine="davinci\
+    def generate_text(self, prompt, max_tokens=2048, temperature=0.7):
+        response = openai.Completion.create(
+            engine="text-davinci-002\
